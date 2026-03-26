@@ -129,3 +129,23 @@ def plot_sample_predictions(images, labels, preds, class_names, n=5):
         plt.title(f"L: {class_names[labels[i]]}\nP: {class_names[preds[i]]}", color=color)
         plt.axis('off')
     plt.show()
+
+def display_sample(dataset, index):
+    """Displays an image and its corresponding text from the dataset."""
+    sample = dataset[index] # Get sample (image, label_idx)
+
+    # Get the original metadata to retrieve the text captions.
+    metadata_item = dataset.filtered_data[dataset.indices[index]]
+    image = sample[0] 
+    labels = metadata_item['labels'] # Original labels from metadata
+    captions = metadata_item['captions'] # Original captions from metadata
+
+    np_image = image.permute(1, 2, 0).cpu().numpy()
+
+    plt.figure(figsize=(6, 6))
+    plt.imshow(np_image)
+    plt.title(f"Labels: {', '.join(labels)}")
+    plt.axis('off')
+    plt.show()
+
+    print(f"Captions: {', '.join(captions)}")
