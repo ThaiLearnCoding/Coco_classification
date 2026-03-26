@@ -7,6 +7,10 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.metrics import confusion_matrix
 import numpy as np
+from PIL import Image
+from zipfile import ZipFile
+from io import BytesIO
+from torch.utils.data import Subset
 
 
 class CLIPGradCAM:
@@ -130,22 +134,30 @@ def plot_sample_predictions(images, labels, preds, class_names, n=5):
         plt.axis('off')
     plt.show()
 
-def display_sample(dataset, index):
-    """Displays an image and its corresponding text from the dataset."""
-    sample = dataset[index] # Get sample (image, label_idx)
+def display_sample(dataset, index, config):
+    # Determine the root dataset and the actual index within it
+    if isinstance(dataset, Subset):
+        root_dataset = dataset.dataset
+        original_idx_in_root = dataset.indices[index]
+    else:
+        root_dataset = dataset
+        original_idx_in_root = index
 
-    # Get the original metadata to retrieve the text captions.
-    metadata_item = dataset.filtered_data[dataset.indices[index]]
-    image = sample[0] 
-    labels = metadata_item['labels'] # Original labels from metadata
-    captions = metadata_item['captions'] # Original captions from metadata
+    # Get the sample's metadata from the root dataset
+    metadata_item = root_dataset.filtered_data[original_idx_in_root]
 
-    np_image = image.permute(1, 2, 0).cpu().numpy()
+    # Load the original image from the zip file using the file_name from metadata
+    zip_path = config['data']['zip_path']
+    with ZipFile(zip_path, 'r') as z:
+        img_data = z.read(f"images/{metadata_item['file_name']}")
+        original_image = Image.open(BytesIO(img_data)).convert('RGB')
 
-    plt.figure(figsize=(6, 6))
-    plt.imshow(np_image)
-    plt.title(f"Labels: {', '.join(labels)}")
+    # Get the true labels
+    true_labels = metadata_item['labels']
+
+    # Display the image and its labels
+    plt.figure(figsize=(7, 7))
+    plt.imshow(original_image)
+    plt.title(f"Sample Index: {index} (Root Index: {original_idx_in_root})\nTrue Labels: {', '.join(true_labels)}")
     plt.axis('off')
     plt.show()
-
-    print(f"Captions: {', '.join(captions)}")
