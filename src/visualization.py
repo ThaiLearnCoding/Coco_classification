@@ -36,45 +36,51 @@ class CLIPGradCAM:
     def save_gradients(self, module, grad_input, grad_output):
         self.gradients = grad_output[0]
 
+
     def generate_heatmap(self, image_tensor, class_idx):
-        self.model.zero_grad()
-        
-        # Chạy forward pass qua lớp Linear để ra logit phân loại
-        logits = self.model(image_tensor)
-        
-        # Tính gradient cho lớp class_idx
-        loss = logits[0, class_idx]
-        loss.backward()
-        
-        # Trích xuất đặc trưng của Vision Transformer (ViT)
-        # activations shape: [Sequence_Length, Batch_Size, Transformer_Dim]
-        # gradients shape: [Sequence_Length, Batch_Size, Transformer_Dim]
-        
+        self.model.eval() 
+        self.model.zero_grad() 
+
+        # Crucial for Grad-CAM: Ensure the input tensor requires gradients
+        # This enables gradient computation even if parts of the model are frozen.
+        if not image_tensor.requires_grad:
+            image_tensor.requires_grad_(True)
+
+        with torch.enable_grad(): 
+            logits = self.model(image_tensor)
+            loss = logits[:, class_idx].sum()
+            loss.backward()
+
+        # Check if gradients and activations were successfully captured by the hooks
+        if self.gradients is None:
+            raise RuntimeError("Gradients were not captured. Ensure the target layer is correct and gradients are flowing. "
+                            "Also, check if the model's output depends on the target layer in a way that allows gradient flow.")
+        if self.activations is None:
+            raise RuntimeError("Activations were not captured. Ensure the target layer is correct.")
+
         act = self.activations.detach()
         grad = self.gradients.detach()
-        
-        # Với ViT, token đầu tiên [CLS] chứa thông tin phân loại chung
-        # Chúng ta dùng gradient của [CLS] làm trọng số
-        weights = grad[0, 0, :].cpu().numpy() # [Transformer_Dim]
-        
-        # Feature maps là các token còn lại (trừ [CLS])
-        # feature_maps shape: [Batch_Size, Tokens_Count, Transformer_Dim]
-        feature_maps = act[1:, 0, :].cpu().numpy() 
-        
-        # Nhân đặc trưng với trọng số
-        heatmap = np.zeros(feature_maps.shape[0], dtype=np.float32)
-        for i, w in enumerate(weights):
-            heatmap += w * feature_maps[:, i]
-            
-        # Reshape heatmap về kích thước lưới ảnh (ví dụ: ViT-B/16@224px là 14x14)
+
+        # The original indexing suggests act/grad are of shape (num_tokens, batch_size, embed_dim)
+        weights = grad[0, 0, :].cpu().numpy() # Shape (embed_dim,)
+
+        # Feature maps from other tokens (excluding CLS)
+        feature_maps = act[1:, 0, :].cpu().numpy() # Shape (num_patches, embed_dim)
+
+        # Calculate heatmap using dot product of feature maps and weights.
+        heatmap = np.dot(feature_maps, weights) # Shape (num_patches,)
+
+        # Reshape the 1D heatmap into a 2D grid corresponding to the patch layout.
         num_patches = feature_maps.shape[0]
-        grid_size = int(np.sqrt(num_patches)) # ví dụ 14 hoặc 21 (với size 336x336)
+        grid_size = int(np.sqrt(num_patches))
+        if grid_size * grid_size != num_patches:
+            raise ValueError(f"Number of patches ({num_patches}) is not a perfect square. Cannot reshape to square grid for visualization.")
         heatmap = heatmap.reshape(grid_size, grid_size)
-        
-        # Chuẩn hóa Heatmap
-        heatmap = np.maximum(heatmap, 0) # ReLU
-        heatmap /= (np.max(heatmap) + 1e-8)
-        
+
+        # Apply ReLU to the heatmap and normalize to [0, 1].
+        heatmap = np.maximum(heatmap, 0) # Apply ReLU
+        heatmap /= (np.max(heatmap) + 1e-8) # Normalize to [0, 1]
+
         return heatmap
 
 def plot_grad_cam(original_image, heatmap, target_size=(336, 336)):
