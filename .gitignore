@@ -1,0 +1,26 @@
+# Python rác
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+
+# Dữ liệu nặng (BẮT BUỘC)
+data/*.json
+!data/metadata.json
+data/*.zip
+data/*.jpg
+data/coco_subset_336/
+
+# Weights mô hình
+*.pth
+*.ckpt
+
+# IDE rác
+.vscode/
+.idea/
+
+# Notebook checkpoint
+.ipynb_checkpoints/
+
+

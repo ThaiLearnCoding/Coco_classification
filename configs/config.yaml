@@ -1,0 +1,17 @@
+data:
+  zip_path: "data/coco_multimodal_subset.zip"
+  image_size: 336
+  batch_size: 32
+  num_workers: 2
+  train_split: 0.8
+  # Danh sách 10 lớp mục tiêu
+  classes: ['person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus', 'train', 'truck', 'bird', 'dog']
+
+model:
+  name: "ViT-L/14@336px" # Model CLIP mạnh nhất phù hợp với size 336
+  device: "cuda"
+  
+train:
+  learning_rate: 0.001
+  epochs: 20
+  few_shot_k: 16 # Số mẫu mỗi lớp cho Few-shot
